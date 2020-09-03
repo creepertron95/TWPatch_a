@@ -724,7 +724,12 @@ int main()
         {
             if(kDown & KEY_A)
             {
-                if
+                if(kHeld & KEY_X)
+                {
+                    currscreen = 3;
+                    consoleClear();
+                }
+                else if
                 (
                     ((patmask & (1 << 30)) || !(patlist[currpat].mask & (1 << 31)))
                     &&
@@ -763,6 +768,77 @@ int main()
                 else
                     currscreen = 0;
                 
+                consoleClear();
+            }
+        }
+        else if(currscreen == 3)
+        {
+            if((kUp & KEY_START) && !kHeld)
+            {
+                extern void sha256(const void* in, size_t insize, u8 out[32]);
+                u8 hash[32];
+                
+                sha256(firm + *(u32*)(firm + 0x70), *(u32*)(firm + 0x78), hash);
+                if(!memcmp(hash, firm + 0x80, 32))
+                {
+                    FILE* fo = fopen(!agbg ? "/luma/twl.firm" : "/luma/agb.firm", "wb");
+                    if(fo)
+                    {
+                        uint8_t* firmcopy = malloc(firmsize);
+                        if(firmcopy)
+                        {
+                            memcpy(firmcopy, firm, firmsize);
+                            
+                            size_t towerpat = PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
+                            size_t caninpat = 0;
+                            size_t loadepat = 0;
+                            
+                            puts("pat_apply_tower");
+                            pat_apply_tower(firmcopy + *(u32*)(firmcopy + 0x70), *(u32*)(firmcopy + 0x78), towerpat);
+                            puts("pat_apply_destroyer");
+                            pat_apply_destroyer(firmcopy + *(u32*)(firmcopy + 0xA0), *(u32*)(firmcopy + 0xA8), loadepat);
+                            puts("pat_apply_canine");
+                            pat_apply_canine(firmcopy + *(u32*)(firmcopy + 0xD0), *(u32*)(firmcopy + 0xD8), caninpat);
+                            
+                            puts("sha256");
+                            sha256(firmcopy + *(u32*)(firmcopy + 0x70), *(u32*)(firmcopy + 0x78), hash);
+                            memcpy(firmcopy + 0x80, hash, 32);
+                            sha256(firmcopy + *(u32*)(firmcopy + 0xA0), *(u32*)(firmcopy + 0xA8), hash);
+                            memcpy(firmcopy + 0xB0, hash, 32);
+                            sha256(firmcopy + *(u32*)(firmcopy + 0xD0), *(u32*)(firmcopy + 0xD8), hash);
+                            memcpy(firmcopy + 0xE0, hash, 32);
+                            
+                            puts("Disk write");
+                            if(fwrite(firmcopy, firmsize, 1, fo) == 1)
+                            {
+                                puts("911 OK");
+                                fflush(fo);
+                            }
+                            else
+                            {
+                                puts("Disk error");
+                            }
+                            
+                            fclose(fo);
+                        }
+                        else
+                        {
+                            puts("Out of memory");
+                        }
+                    }
+                    else
+                    {
+                        puts("Fail to export FIRM");
+                    }
+                }
+                else
+                {
+                    puts("Hash verification fail, corrupted OS?");
+                }
+            }
+            else if(kUp && !kHeld)
+            {
+                currscreen = 2;
                 consoleClear();
             }
         }
@@ -898,10 +974,20 @@ int main()
             }
             while(0);
             
-            puts("\n Press A to toggle selected patch");
+            if(kHeld & KEY_X)
+                puts("\n Press A to open 911 patcher      ");
+            else
+                puts("\n Press A to toggle selected patch ");
             puts("\n Press B to go back");
             if(patmask & PAT_REDSHIFT)
                 puts("\n Hold Y + B to open CTR_Redshift configurator");
+        }
+        else if(currscreen == 3)
+        {
+            puts("911 patch menu\n");
+            
+            puts("There is no menu here.");
+            puts("Power off your device.");
         }
         else
         {
