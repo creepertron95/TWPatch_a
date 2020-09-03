@@ -25,7 +25,7 @@ static void print_hash(uint8_t* hash)
 
 int main(int argc, char** argv)
 {
-    //size_t pat = PAT_HID | PAT_ANTIWEAR | PAT_RTCOM | PAT_GPUSCALING;
+    //size_t pat = PAT_HID | PAT_GPUSCALING | PAT_SQUISH;
     size_t pat = PAT_EHANDLER | PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
     
     int iskernel = 0;

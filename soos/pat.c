@@ -14,6 +14,8 @@ typedef uint32_t u32;
 #include "trainer_bin.h"
 #include "ehandler_bin.h"
 #include "ehook_bin.h"
+#include "squish_bin.h"
+#include "antiwear_bin.h"
 
 //#define MEME_DEBUG
 
@@ -98,7 +100,7 @@ __attribute__((optimize("Ofast"))) void* memesearch(const void* patptr, const vo
 size_t pat_copyholerunonce(uint8_t* patchbuf, const color_setting_t* sets, size_t mask, size_t* outsize)
 {
     if(!patchbuf)
-        return mask & (PAT_REDSHIFT | PAT_WIDE | PAT_RELOC | PAT_EHANDLER);
+        return mask & (PAT_REDSHIFT | PAT_WIDE | PAT_RELOC | PAT_EHANDLER | PAT_SQUISH | PAT_ANTIWEAR);
     
     uint16_t* tptr = (uint16_t*)patchbuf;
     
@@ -233,6 +235,23 @@ size_t pat_copyholerunonce(uint8_t* patchbuf, const color_setting_t* sets, size_
             *(tptr++) = 0x46C0; //NOP
         
         mask &= ~PAT_EHANDLER;
+    }
+    
+    if(mask & PAT_ANTIWEAR)
+    {
+        /*
+        puts("Installing antiread antiwear");
+        
+        if(outsize)
+            outsize[2] = (size_t)((((uint8_t*)tptr - patchbuf) + 3) & ~3);
+        
+        memcpy(tptr, antiwear_bin, antiwear_bin_size);
+        tptr += (antiwear_bin_size + 1) >> 1;
+        
+        if(((uint8_t*)tptr - patchbuf) & 2)
+            *(tptr++) = 0x46C0; //NOP
+        */
+        mask &= ~PAT_ANTIWEAR;
     }
     
     *(tptr++) = 0x4770; // BX LR
@@ -970,7 +989,7 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
     }
     
     // ALL of these require hooking
-    if(patmask & (PAT_HOLE | PAT_REDSHIFT | PAT_RTCOM | PAT_WIDE | PAT_RELOC | PAT_DEBUG | PAT_GPUSCALING | PAT_EHANDLER))
+    if(patmask & (PAT_HOLE | PAT_REDSHIFT | PAT_RTCOM | PAT_WIDE | PAT_RELOC | PAT_DEBUG | PAT_GPUSCALING | PAT_EHANDLER | PAT_ANTIWEAR | PAT_SQUISH))
     {
         // ==[ Alternative code spaces, unused for now ]==
         
@@ -1065,17 +1084,38 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
                     
                     // [0] - total hole usage
                     // [1] - offset from hole start to trainer code (per-frame)
-                    size_t copyret[2];
-                    copyret[1] = 0; // has to be initialized!
+                    // [2] - offset from hole start to trainer code (per-frame)
+                    size_t copyret[3];
+                    copyret[1] = ~0; // has to be initialized!
+                    copyret[2] = ~0; // has to be initialized!
                     
                     // do not clear PAT_RELOC because it's cleared below
-                    mask &= pat_copyholerunonce(resptr, sets, patmask & ~PAT_RELOC, copyret) & ~PAT_RELOC;
+                    mask &= pat_copyholerunonce(resptr, sets, (patmask & ~PAT_RELOC), copyret) & ~PAT_RELOC;
                     
                     uint32_t sraddr = (res2ptr - codecptr) + addroffs;
                     uint32_t toaddr = (resptr - codecptr) + 0x300000;
                     
                     // BL debughook --> runonce
                     makeblT(&res2ptr, toaddr, sraddr);
+                    /*
+                    if((patmask & PAT_ANTIWEAR) && ~copyret[2])
+                    {
+                        res2ptr = memesearch(
+                            (const uint8_t[]){0x60, 0x39, 0x40, 0x1C, 0x40, 0x06},
+                            0, codecptr, codecsize, 6);
+                        
+                        if(res2ptr)
+                        {
+                            puts("Patching screenfill");
+                            
+                            res2ptr -= 0x10;
+                            
+                            sraddr = (res2ptr - codecptr) + 0x300000;
+                            toaddr = (resptr - codecptr) + 0x300000 + copyret[2] + 16;
+                            makeblT(&res2ptr, toaddr, sraddr);
+                        }
+                    }
+                    */
                 }
                 else
                 {
