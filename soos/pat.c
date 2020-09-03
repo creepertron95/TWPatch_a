@@ -1334,3 +1334,171 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
     
     return mask & patmask;
 }
+
+size_t pat_apply_tower(uint8_t* codecptr, size_t codecsize, size_t mask)
+{
+    uint8_t* resptr = 0;
+    size_t patmask = mask;
+    
+    if(patmask & PAT_K11_KMAP)
+    {
+        resptr = memesearch(
+            (const uint8_t[]){0x00, 0x20, 0x00, 0x90, 0x2A, 0x4B},
+            0, codecptr, codecsize, 6);
+        
+        if(resptr)
+        {
+            uint8_t* bl = resptr - 6;
+            
+            uint32_t* chkptr = (uint32_t*)(((size_t)resptr & ~3) + 4);
+            uint32_t ofs = 0;
+            
+            while((*chkptr & ~(0x2000)) != 0x14C06)
+            {
+                if(++ofs == 0x100)
+                    break;
+                chkptr++;
+            }
+            
+            if(ofs != 0x100)
+            {
+                puts("AXI perm fixed");
+                printf("%02X\n", ofs);
+                
+                resptr[0] = (uint8_t)ofs;
+                resptr[1] = 0x48;
+            }
+            
+            resptr += 4;
+            chkptr = (uint32_t*)(((size_t)resptr & ~3) + 4);
+            ofs = 0;
+            
+            while(*chkptr != 0x1FF80000)
+            {
+                if(++ofs == 0x100)
+                    break;
+                chkptr++;
+            }
+            
+            if(ofs != 0x100)
+            {
+                puts("AXI address fixed");
+                printf("%02X\n", ofs);
+                
+                resptr[0] = (uint8_t)ofs;
+            }
+            
+            resptr += 8;
+            
+            ofs = bl[0] << 11;
+            ofs |= (bl[1] & 7) << 19;
+            ofs |= bl[2];
+            ofs |= (bl[3] & 7) << 8;
+            
+            ofs -= (resptr - bl) >> 1;
+            
+            resptr[0] = ofs >> 11;
+            resptr[1] &= ~7;
+            resptr[1] |= (ofs >> 19) & 7;
+            resptr[2] = ofs;
+            resptr[3] &= ~7;
+            resptr[3] |= (ofs >> 8) & 7;
+            
+            puts("AXI mapper fixed");
+            printf("%08X\n", *(uint32_t*)bl);
+            printf("%08X\n", *(uint32_t*)resptr);
+            
+            patmask &= ~PAT_K11_KMAP;
+        }
+    }
+    
+    if(patmask & PAT_K11_TLS)
+    {
+        
+    }
+    
+    if(patmask & PAT_K11_EHAND)
+    {
+        resptr = memesearch(
+            (const uint8_t[]){0x1D, 0x48, 0x70, 0xB5},
+            0, codecptr, codecsize, 4);
+        
+        if(resptr)
+        {
+            uint32_t* chkptr = (uint32_t*)(((size_t)resptr & ~3) + 4);
+            uint32_t kaddr = chkptr[*resptr];
+            
+            uint8_t* varptr = codecptr + (kaddr & 0x1FFFF) - 2;
+            varptr[0] = 0xFF;
+            varptr[1] = 0;
+            varptr[2] = 0xFF;
+            
+            puts("Patched kernel variables");
+            printf("%08X\n", kaddr);
+            
+            patmask &= ~PAT_K11_EHAND;
+        }
+    }
+    
+    if(patmask & PAT_K11_MMAP)
+    {
+        resptr = memesearch(
+            (const uint8_t[]){0x01, 0x25, 0x43, 0x22},
+            0, codecptr, codecsize, 4);
+        
+        if(resptr)
+        {
+            uint8_t* bl = resptr + 0x14;
+            uint32_t offs = bl[0] << 11;
+            offs |= (bl[1] & 7) << 19;
+            offs |= bl[2];
+            offs |= (bl[3] & 7) << 8;
+            
+            //patmask &= ~PAT_K11_MMAP;
+        }
+    }
+    
+    return mask & patmask;
+}
+
+size_t pat_apply_canine(uint8_t* codecptr, size_t codecsize, size_t mask)
+{
+    uint8_t* resptr = 0;
+    size_t patmask = mask;
+    
+    return mask & patmask;
+}
+
+size_t pat_apply_destroyer(uint8_t* codecptr, size_t codecsize, size_t mask)
+{
+    uint8_t* resptr = 0;
+    size_t patmask = mask;
+    
+    if(patmask & PAT_K11_EHAND)
+    {
+        resptr = memesearch(
+            (const uint8_t[]){0x1C, 0x30, 0x33, 0x46},
+            0, codecptr, codecsize, 4);
+        
+        if(resptr)
+        {
+            uint8_t* res2ptr = memesearch(
+                (const uint8_t[]){0x3E, 0x60, 0x7D, 0x60},
+                0, codecptr, codecsize, 4);
+            
+            if(res2ptr && res2ptr > resptr)
+            {
+                uint32_t dist = ((res2ptr - resptr) >> 1) - 2;
+                
+                resptr[0] = dist;
+                resptr[1] = 0xE0;
+                
+                puts("Patched broken MMU function");
+                
+                patmask &= ~PAT_K11_EHAND;
+            }
+        }
+    }
+    
+    return mask & patmask;
+}

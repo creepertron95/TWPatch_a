@@ -25,11 +25,24 @@ static void print_hash(uint8_t* hash)
 
 int main(int argc, char** argv)
 {
-    size_t pat = PAT_HID | PAT_ANTIWEAR | PAT_RTCOM | PAT_GPUSCALING;
+    //size_t pat = PAT_HID | PAT_ANTIWEAR | PAT_RTCOM | PAT_GPUSCALING;
+    size_t pat = PAT_EHANDLER | PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
     
-    if(argv[1])
+    int iskernel = 0;
+    
+    const char* firstparam = argv[1];
+    
+    if(firstparam)
     {
-        if(!strcmp("agb", argv[1]))
+        if(firstparam[0] == '.')
+        {
+            iskernel = 1;
+            
+            firstparam += 1;
+        }
+        
+        
+        if(!strcmp("agb", firstparam))
         {
             puts("AGBG Debug");
             agbg = 1;
@@ -91,6 +104,53 @@ int main(int argc, char** argv)
     }
     
     puts("Doing patches");
+    
+    if(iskernel)
+    {
+        uint8_t hash[32];
+        sha256(mirf, (mirfsize + 0x1FF) & ~0x1FF, hash);
+        
+        print_hash(hash);
+        print_hash(firm + 0x50);
+        
+        if(!memcmp(hash, firm + 0x50, 32))
+            puts("Checksum success!");
+        
+        uint8_t* firmcopy = firm;
+        
+        puts("pat_apply_tower");
+        pat_apply_tower(firmcopy + *(uint32_t*)(firmcopy + 0x70), *(uint32_t*)(firmcopy + 0x78), pat);
+        puts("pat_apply_destroyer");
+        pat_apply_destroyer(firmcopy + *(uint32_t*)(firmcopy + 0xA0), *(uint32_t*)(firmcopy + 0xA8), pat);
+        puts("pat_apply_canine");
+        pat_apply_canine(firmcopy + *(uint32_t*)(firmcopy + 0xD0), *(uint32_t*)(firmcopy + 0xD8), pat);
+        
+        puts("sha256");
+        sha256(firmcopy + *(uint32_t*)(firmcopy + 0x70), *(uint32_t*)(firmcopy + 0x78), hash);
+        memcpy(firmcopy + 0x80, hash, 32);
+        sha256(firmcopy + *(uint32_t*)(firmcopy + 0xA0), *(uint32_t*)(firmcopy + 0xA8), hash);
+        memcpy(firmcopy + 0xB0, hash, 32);
+        sha256(firmcopy + *(uint32_t*)(firmcopy + 0xD0), *(uint32_t*)(firmcopy + 0xD8), hash);
+        memcpy(firmcopy + 0xE0, hash, 32);
+        
+        FILE* fo = fopen("twl.firm", "wb");
+        if(fo)
+        {
+            if(fwrite(firmcopy, firmsize, 1, fo) == 1)
+            {
+                puts("Write success");
+                fflush(fo);
+            }
+            else
+            {
+                puts("Write fail");
+            }
+            
+            fclose(fo);
+        }
+        
+        return 0;
+    }
     
     uint8_t* resptr = 0;
     
