@@ -13,6 +13,16 @@
 
 size_t lzss_enc2(const void* __restrict in, void* __restrict out, size_t insize, size_t outsize);
 
+extern void sha256(const void* in, size_t inlen, uint8_t out[32]);
+
+static void print_hash(uint8_t* hash)
+{
+    for(int i = 0; i != 32; i++)
+        printf("%02X", hash[i]);
+    
+    puts("");
+}
+
 int main(int argc, char** argv)
 {
     size_t pat = PAT_HID | PAT_ANTIWEAR | PAT_RTCOM | PAT_GPUSCALING;
@@ -52,8 +62,16 @@ int main(int argc, char** argv)
     uint8_t* codecptr = 0;
     size_t codecsize = 0;
     
+    size_t firmsize = 0;
+    uint8_t* firm = LoadFIRM(&firmsize);
+    if(!firm)
+    {
+        puts("Failed to load FIRM");
+        return 1;
+    }
+    
     size_t mirfsize = 0;
-    uint8_t* mirf = LoadSection0(&mirfsize);
+    uint8_t* mirf = FindSection0(firm, &mirfsize);
     if(mirf)
     {
         puts("Processing, please wait...");
@@ -66,7 +84,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        puts("\n\nFailed to load TwlBg, please read above");
+        puts("\n\nFailed to find TwlBg, please read above");
         puts("Push SELECT to exit");
         
         return 1;
@@ -82,7 +100,7 @@ int main(int argc, char** argv)
     settest.gamma[1] = 1.0F;
     settest.gamma[2] = 1.0F;
     settest.brightness = 1.0F;
-    pat_apply(codecptr, codecsize, &settest, pat);
+    pat_apply_background(codecptr, codecsize, &settest, pat);
     
     puts("Compressing... this will take a year or two");
     

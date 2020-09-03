@@ -349,8 +349,12 @@ int main()
     uint8_t* codecptr = 0;
     size_t codecsize = 0;
     
+    size_t firmsize = 0;
+    uint8_t* firm = LoadFIRM(&firmsize);
     size_t mirfsize = 0;
-    uint8_t* mirf = LoadSection0(&mirfsize);
+    uint8_t* mirf = 0;
+    if(firm)
+        mirf = FindSection0(firm, &mirfsize);
     if(mirf)
     {
         puts("Processing, please wait...");
@@ -537,7 +541,7 @@ int main()
                     }
                 }
                 
-                pat_apply(codecptr, codecsize, &redset, mask);
+                pat_apply_background(codecptr, codecsize, &redset, mask);
                 
                 puts("Compressing... this will take a year or two");
                 

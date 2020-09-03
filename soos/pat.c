@@ -353,7 +353,7 @@ static void makeblT(uint8_t** buf, size_t to, size_t from)
     *buf = res;
 }
 
-size_t pat_apply(uint8_t* codecptr, size_t codecsize, const color_setting_t* sets, size_t mask)
+size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_setting_t* sets, size_t mask)
 {
     uint8_t* resptr = 0;
     size_t patmask = mask;
