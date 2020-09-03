@@ -206,6 +206,17 @@ size_t pat_copyholerunonce(uint8_t* patchbuf, const color_setting_t* sets, size_
         mask &= ~PAT_WIDE;
     }
     
+    if(mask & PAT_SQUISH)
+    {
+        memcpy(tptr, squish_bin, squish_bin_size);
+        tptr += (squish_bin_size + 1) >> 1;
+        
+        if(((uint8_t*)tptr - patchbuf) & 2)
+            *(tptr++) = 0x46C0; //NOP
+        
+        mask &= ~PAT_SQUISH;
+    }
+    
     // ===[Relocation]===
     
     if(mask & PAT_RELOC)
@@ -536,51 +547,54 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
             //TODO: experiment with the below two things
             // these values below change the letterbox size
             
-            if(!(~patmask & (PAT_SQUISH | PAT_WIDE)))
+            if(!(patmask & PAT_GPUSCALING))
             {
-                puts("Applying wide-squish patch");
-                
-                if(!agbg)
+                if(!(~patmask & (PAT_SQUISH | PAT_WIDE)))
                 {
-                    resptr[0] = (384 * 2) >> 8;
+                    puts("Applying wide-squish patch");
                     
-                    resptr[2] = 0x24;
-                    resptr[3] = 0x02;
+                    if(!agbg)
+                    {
+                        resptr[0] = (384 * 2) >> 4;
+                        
+                        resptr[2] = 0x24;
+                        resptr[3] = 0x01;
+                    }
+                    else
+                    {
+                        resptr[0] = (400 * 2) >> 4;
+                        
+                        resptr[2] = 0x2D;
+                        resptr[3] = 0x01;
+                    }
                 }
-                else
+                else if(patmask & PAT_WIDE)
                 {
-                    resptr[0] = (400 * 2) >> 4;
+                    puts("Applying wide patch");
                     
-                    resptr[2] = 0x2D;
-                    resptr[3] = 0x01;
+                    if(!agbg)
+                        resptr[2] += (384 - 320); //lol
+                    else
+                        resptr[2] += (400 - 360);
                 }
-            }
-            else if(patmask & PAT_WIDE)
-            {
-                puts("Applying wide patch");
-                
-                if(!agbg)
-                    resptr[2] += (384 - 320); //lol
-                else
-                    resptr[2] += (400 - 360);
-            }
-            else // PAT_SQUISH
-            {
-                puts("Applying squish patch");
-                
-                if(!agbg)
+                else // PAT_SQUISH
                 {
-                    resptr[0] = (320 * 2) >> 8;
+                    puts("Applying squish patch");
                     
-                    resptr[2] = 0x24;
-                    resptr[3] = 0x02;
-                }
-                else
-                {
-                    resptr[0] = (360 * 2) >> 2;
-                    
-                    resptr[2] = 0xAD;
-                    resptr[3] = 0x00;
+                    if(!agbg)
+                    {
+                        resptr[0] = (320) >> 4;
+                        
+                        resptr[2] = 0x24;
+                        resptr[3] = 0x01;
+                    }
+                    else
+                    {
+                        resptr[0] = (360 * 2) >> 2;
+                        
+                        resptr[2] = 0xAD;
+                        resptr[3] = 0x00;
+                    }
                 }
             }
             
@@ -592,64 +606,53 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
                         // TWL non-MTXscale GPUscale path
                         (const uint8_t[]){0xC0, 0x23, 0x00, 0x2F},
                         0, codecptr, codecsize, 4);
+                    
                     if(resptr)
                     {
                         puts("Applying DMPGL-GPU patch");
                         
+                        // these two instructions set the texture resolution
+                        
+                        // set input width
+                        resptr[0] = 0xC0; // MOV r3, #192
+                        resptr[1] = 0x23;
+                        
+                        // set bottom screen output width
+                        resptr[2] = 0xFF; // MOV r2, #320
+                        resptr[3] = 0x22;
+                        resptr[4] = 0x41;
+                        resptr[5] = 0x32;
+                        
                         if(patmask & PAT_WIDE)
                         {
-                            // these two instructions set the texture resolution
                             
-                            resptr[0] = 0xC0;
-                            resptr[1] = 0x23;
-                            
-                            resptr[2] = 0xFF;
-                            resptr[3] = 0x22;
-                            resptr[4] = 0x41;
-                            resptr[5] = 0x32;
-                            
-                            resptr[6] = 0x5F;
-                            resptr[7] = 0x00;
-                            
-                            if(patmask & PAT_SQUISH)
-                            {
-                                resptr[6] = 0x9F;
-                                resptr[7] = 0x00;
-                            }
-                            else
-                            {
-                                resptr[8] = 0xC0;
-                                resptr[9] = 0x23;
-                            }
-                            
-                            resptr[12] = 0xA7;
-                            resptr[13] = 0x60;
                         }
                         else
                         {
-                            resptr[0] = 0xC0;
-                            resptr[1] = 0x23;
-                            
-                            resptr[2] = 0xFF;
-                            resptr[3] = 0x22;
-                            resptr[4] = 0x41;
-                            resptr[5] = 0x32;
-                            
-                            resptr[6] = 0x5F;
-                            resptr[7] = 0x00;
-                            
                             if(patmask & PAT_SQUISH)
                             {
-                                resptr[6] = 0x9F;
+                                // LSL r7, r3, #2
+                                //resptr[6] = 0x9F;
+                                resptr[6] = 0x5F;
                                 resptr[7] = 0x00;
+                                
+                                // MOV r3, #192
+                                resptr[8] = 0xC0;
+                                resptr[9] = 0x23;
                             }
                             else
                             {
+                                // LSL r7, r3, #1
+                                resptr[6] = 0x5F;
+                                resptr[7] = 0x00;
+                                
+                                // MOV r3, #192
                                 resptr[8] = 0xC0;
                                 resptr[9] = 0x23;
                             }
                             
-                            resptr[12] = 0xA7;
+                            // set top screen output width
+                            resptr[12] = 0xA7; // STR r7, [r4, #8]
                             resptr[13] = 0x60;
                         }
                     }
@@ -705,7 +708,7 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
     
     if(patmask & PAT_SQUISH)
     {
-        resptr = memesearch(
+        /*resptr = memesearch(
             (const uint8_t[]){0x1B, 0x02, 0xD2, 0x1A},
             0, codecptr, codecsize, 4);
         if(resptr)
@@ -717,25 +720,196 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
             
             resptr[6] = 0xC0;
             resptr[7] = 0x46;
-            
-            mask &= ~PAT_SQUISH;
-        }
+        }*/
         
         /*resptr = memesearch(
+            (const uint8_t[]){0x0A, 0xD7, 0x23, 0x42},
+            0, codecptr, codecsize, 4);
+        if(resptr)
+        {
+            puts("Co-ordinate recalc #1");
+            
+            resptr[0] = 0x41;
+            resptr[1] = 0xA3;
+            
+            resptr[4] = 0x3D;
+            resptr[5] = 0xA3;
+            
+            resptr[16] = resptr[0];
+            resptr[17] = resptr[1];
+            resptr[20] = resptr[4];
+            resptr[21] = resptr[5];
+            
+        }
+        
+        resptr = memesearch(
+            (const uint8_t[]){0x00, 0x00, 0x48, 0x43, 0x00, 0x00, 0x48, 0xC3},
+            0, codecptr, codecsize, 8);
+        if(resptr)
+        {
+            puts("Co-ordinate recalc #2");
+            
+            resptr[2] = 0xC8;
+            resptr[6] = 0xC8;
+        }*/
+        
+        /*resptr = memesearch(
+            (const uint8_t[]){0x14, 0xAE, 0x47, 0x37, 0x00, 0x40, 0x46, 0x00},
+            0, codecptr, codecsize, 8);
+        if(resptr)
+        {
+            puts("GPU texel adjust");
+            
+            resptr[0] = 0x14;
+            resptr[1] = 0xAE;
+            resptr[2] = 0x47;
+            resptr[3] = 0x36;
+        }*/
+        
+        resptr = memesearch(
+            (const uint8_t[]){0x70, 0x69, 0xE0, 0x65},
+            0, codecptr, codecsize, 4);
+        if(resptr)
+        {
+            puts("No VSync adjust");
+            
+            resptr[4] = 0xC0;
+            resptr[5] = 0x46;
+            
+            resptr[6] = 0xC0;
+            resptr[7] = 0x46;
+        }
+        
+        resptr = memesearch(
             (const uint8_t[]){0x80, 0x39, 0xFF, 0x23},
             0, codecptr, codecsize, 4);
         if(resptr)
         {
             puts("Thin pixels DMPGL");
             
-            resptr[2] = 0xCB;
+            /*
+            // LSL r3, r1, #3
+            resptr[2] = 0xCB; // width = (0x80 << 3) == 1024
             resptr[3] = 0x00;
             
-            resptr[10] = 0xE0;
+            // SUB r3, #0xE0
+            resptr[10] = 0xE0; // width = 1024 - 224 == 800
             resptr[11] = 0x3B;
+            */
             
-            mask &= ~PAT_SQUISH;
+            
+            /*
+            // LSL r3, r0, #0
+            resptr[2] = 0x03; // width = (0xF0 << 1) == 240
+            resptr[3] = 0x00;
+            
+            // ADD r3, #0xE0
+            resptr[10] = 0xF0; // width = 240 + 160 == 400
+            resptr[11] = 0x33;
+            */
+            
+            
+            /*
+            // LSL r3, r0, #2
+            resptr[2] = 0x83; // width = (0xF0 << 1) == 960
+            resptr[3] = 0x00;
+            
+            // SUB r3, #imm
+            resptr[10] = 0xA0; // width = 960 - 0xA0 == 800
+            resptr[11] = 0x3B;
+            */
+            
+            
+            
+            /*
+            // LSL r7, r3, #1
+            resptr[16] = 0x5F; // mode = 800 << 1 == 0x640
+            resptr[17] = 0x00;
+            
+            // ADD r7, #0xC1
+            resptr[32] = 0xC1; // mode = 0x640 + 0xC1 == 0x701 (DMPGL_TOPSCREENMODE_HIGHRES_DMP)
+            resptr[33] = 0x37;
+            */
+            
+            
+            // LSL r7, r0, #3
+            resptr[16] = 0xC7; // mode = 240 << 3 == 0x780
+            resptr[17] = 0x00;
+            
+            // SUB r7, #0x7F
+            resptr[32] = 0x7F; // mode = 0x780 - 0x7F == 0x701 (DMPGL_TOPSCREENMODE_HIGHRES_DMP)
+            resptr[33] = 0x3F;
+            
+        }
+        
+        // ???
+        /*resptr = memesearch(
+            (const uint8_t[]){0x01, 0x26, 0xFF, 0x27, 0x76, 0x04, 0x91, 0x37},
+            0, codecptr, codecsize, 8);
+        if(resptr)
+        {
+            puts("Framebuffer texture DMPGL");
+            
+            resptr[2] = 0x32; // 800 >> 4
+            
+            resptr[6] = 0x3F;
+            resptr[7] = 0x01; // <<= 4;
         }*/
+        
+        // ???
+        resptr = memesearch(
+            (const uint8_t[]){0x02, 0x88, 0x86, 0xE2}, // lol
+            0, codecptr, codecsize, 4);
+        if(resptr)
+        {
+            puts("Renderbuffer width DMPGL");
+            
+            //resptr[4] = 0x32;
+            //resptr[5] = 0x3E;
+            
+            //resptr[4] = 0x05;
+            //resptr[4] = 0x0D;
+            
+            /*resptr[4] = 0xC8;
+            resptr[5] = 0x00;
+            resptr[6] = 0xA0;
+            resptr[7] = 0xE3;*/
+        }
+        
+        // ??? useful?
+        /*
+        resptr = memesearch(
+            (const uint8_t[]){0xFF, 0x23, 0x00, 0x21, 0x91, 0x33},
+            0, codecptr, codecsize, 6);
+        if(resptr)
+        {
+            puts("Framebuffer viewport DMPGL");
+            
+            resptr[0] = 0x32; // 800 >> 4
+            
+            resptr[3] = 0x1B;
+            resptr[4] = 0x01; // <<= 4;
+        }*/
+        
+        
+        // ??? same as above but extended (look at pattern and offsets)
+        /*resptr = memesearch(
+            (const uint8_t[]){0xFE, 0xB5, 0xFF, 0x23},
+            0, codecptr, codecsize, 4);
+        if(resptr)
+        {
+            puts("MTX out draw DMPGL");
+            
+            resptr[2] = 0x32; // 800 >> 4
+            
+            resptr[10] = 0x1B;
+            resptr[11] = 0x01; // <<= 4;
+            
+            resptr[10] = 0xDB;
+            resptr[11] = 0x00; // <<= 4;
+        }*/
+        
+        mask &= ~PAT_SQUISH;
     }
     
     if(patmask & PAT_GPUSCALING)
