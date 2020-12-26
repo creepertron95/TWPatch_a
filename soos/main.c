@@ -277,10 +277,12 @@ int main()
     
     puts("Hello, please wait while loading");
     
-    textfb = malloc(240 * 400 * 2);
+    textfb = malloc(240 * 416 * 2);
+    textfb += (240 * 8);
     menucon.frameBuffer = textfb;
     
-    fbsBot = malloc(240 * 320 * 4);
+    fbsBot = malloc(240 * 336 * 4);
+    fbsBot += (240 * 8);
     
     if(svcGetSystemTick() & 1)
         fwrite(dummy_bin, dummy_bin_size, 1, stderr);
@@ -556,6 +558,14 @@ int main()
                 }
                 else
                 {
+                    if(kHeld & KEY_R)
+                    {
+                        printf("codecptr:   %08X\n", codecptr);
+                        printf("codeptr:    %08X\n", codeptr);
+                        printf("codecsize:  %08X\n", codecsize);
+                        printf("outsize:    %08X\n", outsize);
+                    }
+                    
                     puts("Failed to compress...");
                     puts("  Something went terribly wrong :/");
                 }
