@@ -30,10 +30,12 @@ static inline void putpixel(uint32_t* fb, uint32_t px, uint32_t x, uint32_t y)
 
 static uint32_t* fbTop = 0;
 static uint32_t* fbBot = 0;
+static uint32_t* fbsBot = 0;
 
 static uint32_t overlaytimer = ~0;
 static uint32_t currentscale = 0;
 static uint32_t redrawfb = 1;
+static uint32_t redrawscale = 1;
 
 static uint32_t* resosptr = 0;
 static size_t resossize = 0;
@@ -45,25 +47,31 @@ static uint32_t currscreen = 0;
 static color_setting_t redset;
 static int curred = 0;
 
-static __attribute__((optimize("Ofast"))) void DoOverlay()
+static __attribute__((optimize("Os"), noinline)) void DoOverlay(void)
 {
     uint32_t i, j, k = 0;
     
     if(!fbTop || !fbBot)
         return;
     
-    if(overlaytimer && ~overlaytimer)
+    if(overlaytimer && ~overlaytimer) //nonzero and not -1
     {
         if(!--overlaytimer)
+        {
             redrawfb = 1;
+            redrawscale = 1;
+        }
     }
     
-    if(resosptr && redrawfb)
+    if(resosptr && redrawscale && fbsBot)
     {
+        redrawfb = 1;
+        
         if(kernel.pattern)
         {
             uint32_t* krnres;
             
+            //memset(fbTop, 0, 240 * 400 * 4); //prevent junk
             krnres = (uint32_t*)krn_calc(resosptr, 0, 192, 256, 0, 0, &kernel, &kernel, ~0);
             memcpy(fbTop + (40 * 240), krnres, 240 * 320 * 4);
             
@@ -71,46 +79,11 @@ static __attribute__((optimize("Ofast"))) void DoOverlay()
             if(overlaytimer && textfb)
             {
                 for(k = 0; k != (240 * 320); k++)
-                {
-                    if(textfb[k] && k >= 240)
-                    {
-                        const uint32_t outlinepx = 0;
-                        
-                        if(!textfb[k - 240])
-                        {
-                            //fbTop[k - 240] = outlinepx;
-                            fbBot[k - 240] = outlinepx;
-                        }
-                        if(!textfb[k - 1])
-                        {
-                            //fbTop[k - 1] = outlinepx;
-                            fbBot[k - 1] = outlinepx;
-                        }
-                        if(!textfb[k + 1])
-                        {
-                            //fbTop[k + 1] = outlinepx;
-                            fbBot[k + 1] = outlinepx;
-                        }
-                        if(!textfb[k + 240])
-                        {
-                            //fbTop[k + 240] = outlinepx;
-                            fbBot[k + 240] = outlinepx;
-                        }
-                        
-                        fbBot[k] = ~0;
-                        continue;
-                    }
-                    else
-                    {
-                        fbBot[k] = (krnres[k] & 0xFCFCFCFC) >> 2;
-                        continue;
-                    }
-                }
-                return;
+                    fbsBot[k] = (krnres[k] & ~0x03030303) >> 2;
             }
             else
             {
-                memcpy(fbBot, krnres, 240 * 320 * 4);
+                memcpy(fbsBot, krnres, 240 * 320 * 4);
             }
         }
         else
@@ -122,14 +95,16 @@ static __attribute__((optimize("Ofast"))) void DoOverlay()
             {
                 for(j = 0; j != 256; j++)
                     for(i = 0; i != 192; i++)
-                        putpixel(fbBot, (resosptr[k++] & 0xFCFCFCFC) >> 2, i + 48, j + 72);
+                        putpixel(fbsBot, (resosptr[k++] & ~0x03030303) >> 2, i + 48, j + 72);
             }
             else
             {
                 for(i = 0; i != 256; i++, k+= 192)
-                    memcpy(fbBot + 48 + (240 * i), resosptr + k, 192 * 4);
+                    memcpy(fbsBot + 48 + (240 * i), resosptr + k, 192 * 4);
             }
         }
+        
+        redrawscale = 0;
     }
     
     if(!textfb)
@@ -140,15 +115,19 @@ static __attribute__((optimize("Ofast"))) void DoOverlay()
     
     if(!overlaytimer)
     {
+        memcpy(fbBot, fbsBot, 240 * 320 * 4);
+        
         redrawfb = 0;
         return;
     }
+    
+    memcpy(fbBot, fbsBot, 241 * 4);
     
     k = 241;
     do
     {
         if(!textfb[k])
-            continue;
+            fbBot[k] = fbsBot[k];
         else
         {
             const uint32_t outlinepx = 0;
@@ -174,24 +153,12 @@ static __attribute__((optimize("Ofast"))) void DoOverlay()
                 fbBot[k + 240] = outlinepx;
             }
             
-            //                   RRRRRGGG GGGBBBBB
-            //          BBBBBBBB GGGGGGGG RRRRRRRR
-            // RRRRRRRR GGGGGGGG BBBBBBBB AAAAAAAA
-            
-            /*
-            uint32_t px;
-            
-            px = textfb[k];
-            px = (((px >>  8) & 0x0000F8) | ((px >> 13) & 0x000007))
-               | (((px <<  5) & 0x00FC00) | ((px >>  1) & 0x000300))
-               | (((px << 19) & 0xF80000) | ((px << 14) & 0x070000));
-            //fbTop[k] = px;
-            fbBot[k] = px;
-            */
             fbBot[k] = ~0;
         }
     }
     while(++k != (240 * 319));
+    
+    memcpy(fbBot + (240 * 319), fbsBot + (240 * 319), 240 * 4);
     
     redrawfb = 0;
 }
@@ -312,6 +279,8 @@ int main()
     
     textfb = malloc(240 * 400 * 2);
     menucon.frameBuffer = textfb;
+    
+    fbsBot = malloc(240 * 320 * 4);
     
     if(svcGetSystemTick() & 1)
         fwrite(dummy_bin, dummy_bin_size, 1, stderr);
@@ -442,6 +411,7 @@ int main()
     
     overlaytimer = 384;
     redrawfb = 1;
+    redrawscale = 1;
     
     krn_cvt(&kernel, scalelist1[currentscale].ptr, 5, 15);
     
@@ -611,6 +581,8 @@ int main()
                         krn_cvt(&kernel, scalelist1[currentscale].ptr, 5, 15);
                     else
                         krn_cvt(&kernel, scalelist1[currentscale].ptr, 6, 27);
+                    
+                    redrawscale = 1;
                 }
                 
                 if(kDown & KEY_UP)
@@ -625,6 +597,8 @@ int main()
                         krn_cvt(&kernel, scalelist1[currentscale].ptr, 5, 15);
                     else
                         krn_cvt(&kernel, scalelist1[currentscale].ptr, 6, 27);
+                    
+                    redrawscale = 1;
                 }
             }
             
@@ -859,6 +833,8 @@ int main()
             }
             else
                 kernel.pattern = 0;
+            
+            redrawscale = 1;
         }
         
         if(kUp & KEY_X)
@@ -867,15 +843,33 @@ int main()
                 krn_cvt(&kernel, scalelist1[currentscale].ptr, 5, 15);
             else
                 krn_cvt(&kernel, scalelist1[currentscale].ptr, 6, 27);
+            
+            redrawscale = 1;
         }
         
-        if(currscreen || (kHeld & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_START))
-        || ((kUp | kDown) & (KEY_A | KEY_B))
+        if
+        (
+            currscreen
+            || (kHeld & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_START))
+            || ((kUp | kDown) & (KEY_A | KEY_B))
         )
+        {
+            if(!overlaytimer || !~overlaytimer)
+                redrawscale = 1;
+            
             overlaytimer = 96;
+        }
         
         if(kDown | (kUp & KEY_X))
-            redrawfb = 1;
+        {
+            if(!redrawfb)
+            {
+                if(!overlaytimer)
+                    redrawscale = 1;
+                
+                redrawfb = 1;
+            }
+        }
         
         // start print menu
         
