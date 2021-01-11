@@ -773,9 +773,11 @@ int main()
                         {
                             memcpy(firmcopy, firm, firmsize);
                             
-                            size_t towerpat = PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
-                            size_t caninpat = 0;
-                            size_t loadepat = 0;
+                            size_t allpat = PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
+                            
+                            size_t towerpat = allpat;
+                            size_t caninpat = allpat;
+                            size_t loadepat = allpat;
                             
                             puts("pat_apply_tower");
                             pat_apply_tower(firmcopy + *(u32*)(firmcopy + 0x70), *(u32*)(firmcopy + 0x78), towerpat);
