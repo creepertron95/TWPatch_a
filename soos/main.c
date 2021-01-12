@@ -821,11 +821,16 @@ int main()
                 {
                     puts("Hash verification fail, corrupted OS?");
                 }
+                
+                redrawfb = 1;
             }
-            else if(kUp && !kHeld)
+            //else if(kUp && !kHeld)
+            else if(kUp & KEY_B)
             {
                 currscreen = 2;
                 consoleClear();
+                
+                redrawfb = 1;
             }
         }
         else
