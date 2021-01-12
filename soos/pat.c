@@ -509,7 +509,7 @@ size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_set
             
             const int btn = 31 - 10;
             
-            resptr[6] = 0x3F | (btn << 6);
+            resptr[6] = (u8)(0x3F | (btn << 6));
             resptr[7] = 0x05 | (btn >> 2);
             
             resptr[8] = 0x01;
@@ -1503,7 +1503,7 @@ size_t pat_apply_tower(uint8_t* codecptr, size_t codecsize, size_t mask)
 
 size_t pat_apply_canine(uint8_t* codecptr, size_t codecsize, size_t mask)
 {
-    uint8_t* resptr = 0;
+    //uint8_t* resptr = 0;
     size_t patmask = mask;
     
     return mask & patmask;
