@@ -773,7 +773,7 @@ int main()
                         {
                             memcpy(firmcopy, firm, firmsize);
                             
-                            size_t allpat = PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
+                            size_t allpat = PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP | PAT_K11_UNPANIC | PAT_K11_EHPANIC | PAT_K11_SVCPERM;
                             
                             size_t towerpat = allpat;
                             size_t caninpat = allpat;

@@ -1498,6 +1498,151 @@ size_t pat_apply_tower(uint8_t* codecptr, size_t codecsize, size_t mask)
         }
     }
     
+    if(patmask & PAT_K11_UNPANIC)
+    {
+        const uint8_t* param1 = (const uint8_t[]){0xFE, 0xB5, 0x05, 0x46, 0x0F, 0x46};
+        const uint8_t* param2 = (const uint8_t[]){0x83, 0x00, 0x00, 0x00, 0x01, 0x00};
+        const size_t paramsize = 6;
+        
+        resptr = memesearch(param1, param2, codecptr, codecsize, paramsize);
+        if(resptr)
+        {
+            printf("panic1: %X\n", resptr - codecptr);
+            resptr = memesearch(param1, param2, resptr + 1, codecsize - (resptr - codecptr) - 1, paramsize);
+        }
+        
+        if(resptr)
+        {
+            printf("panic2: %X\n", resptr - codecptr);
+            
+            printf("panicdata: %02X%02X %02X%02X %02X%02X\n",
+                resptr[0], resptr[1],
+                resptr[2], resptr[3],
+                resptr[4], resptr[5]
+                );
+            
+            //HACK: this is no good if the compiler decides to muck up the reg allocation again
+            if(resptr[0] == 0xFE && resptr[4] == 0x0F)
+            {
+                resptr[4] = 2;
+                resptr[5] = 0x27;
+                
+                puts("Unpanic for factory kernel");
+            }
+            else if(resptr[0] == 0x7C && resptr[4] == 0x0E)
+            {
+                resptr[4] = 2;
+                resptr[5] = 0x26;
+                
+                puts("Unpanic applied");
+            }
+            else
+            {
+                puts("[!] Incompatible kernel for unpanic!");
+            }
+        }
+        
+        resptr = memesearch(
+            (const uint8_t[]){0xF3, 0x0C, 0x00, 0x00},
+            0, codecptr, codecsize, 4);
+        if(resptr)
+        {
+            resptr[0] = 0xFF;
+            
+            puts("Patched panic key to L+R");
+        }
+        
+        patmask &= ~PAT_K11_UNPANIC;
+    }
+    
+    if(patmask & PAT_K11_EHPANIC)
+    {
+        resptr = memesearch(
+            (const uint8_t[]){0x1D, 0x48, 0x70, 0xB5},
+            0, codecptr, codecsize, 4);
+        
+        if(resptr)
+        {
+            /*
+                PUSH {R4-R6,LR}
+                LDR r2, =0xFFFF9004
+                LDR r2, [r2]
+                ADDS r2, #0x80
+                LDR r2, [r2]
+                ADDS r2, #0x94
+                LDR r2, [r2]
+                LDR r2, [r2, #0x40]
+                MOV r0, SP
+                MOVS r1, #0
+                CMP r2, #0
+                BEQ . + 4
+                BLX r2
+                POP {R4-R6,PC}
+                .word 0xFFFF9004
+            */
+            
+            // <autogen>
+            
+            *(resptr++) = 0x70;
+            *(resptr++) = 0xb5;
+            *(resptr++) = 0x06;
+            *(resptr++) = 0x4a;
+            *(resptr++) = 0x12;
+            *(resptr++) = 0x68;
+            *(resptr++) = 0x80;
+            *(resptr++) = 0x32;
+            *(resptr++) = 0x12;
+            *(resptr++) = 0x68;
+            *(resptr++) = 0x94;
+            *(resptr++) = 0x32;
+            *(resptr++) = 0x12;
+            *(resptr++) = 0x68;
+            *(resptr++) = 0x12;
+            *(resptr++) = 0x6c;
+            *(resptr++) = 0x68;
+            *(resptr++) = 0x46;
+            *(resptr++) = 0x00;
+            *(resptr++) = 0x21;
+            *(resptr++) = 0x00;
+            *(resptr++) = 0x2a;
+            *(resptr++) = 0x00;
+            *(resptr++) = 0xd0;
+            *(resptr++) = 0x90;
+            *(resptr++) = 0x47;
+            *(resptr++) = 0x70;
+            *(resptr++) = 0xbd;
+            *(resptr++) = 0x04;
+            *(resptr++) = 0x90;
+            *(resptr++) = 0xff;
+            *(resptr++) = 0xff;
+            
+            // </autogen>
+            
+            puts("Kernel panic exception handler");
+        }
+        
+        patmask &= ~PAT_K11_EHPANIC;
+    }
+    
+    if(patmask & PAT_K11_SVCPERM)
+    {
+        resptr = memesearch(
+            (const uint8_t[]){0x1B, 0x0E, 0x1A, 0xE1},
+            0, codecptr, codecsize, 4);
+        
+        if(resptr)
+        {
+            resptr[0x8] = 0xFF;
+            resptr[0x9] = 0xFF;
+            resptr[0xA] = 0xFF;
+            resptr[0xB] = 0xEA;
+            
+            puts("Patched SVC permission checks");
+        }
+        
+        patmask &= ~PAT_K11_SVCPERM;
+    }
+    
     return mask & patmask;
 }
 

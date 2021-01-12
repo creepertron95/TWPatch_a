@@ -26,7 +26,7 @@ static void print_hash(uint8_t* hash)
 int main(int argc, char** argv)
 {
     //size_t pat = PAT_HID | PAT_GPUSCALING | PAT_SQUISH;
-    size_t pat = PAT_EHANDLER | PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP;
+    size_t pat = PAT_EHANDLER | PAT_K11_KMAP | PAT_K11_TLS | PAT_K11_EHAND | PAT_K11_MMAP | PAT_K11_UNPANIC | PAT_K11_EHPANIC | PAT_K11_SVCPERM;
     
     int iskernel = 0;
     

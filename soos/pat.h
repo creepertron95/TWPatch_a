@@ -19,6 +19,9 @@
 #define PAT_K11_TLS     (1 << 21)
 #define PAT_K11_EHAND   (1 << 22)
 #define PAT_K11_MMAP    (1 << 23)
+#define PAT_K11_UNPANIC (1 << 24)
+#define PAT_K11_EHPANIC (1 << 25)
+#define PAT_K11_SVCPERM (1 << 26)
 
 void* memesearch(const void* patptr, const void* bitptr, const void* searchptr, size_t searchlen, size_t patsize);
 size_t pat_apply_background(uint8_t* codecptr, size_t codecsize, const color_setting_t* sets, size_t mask);
